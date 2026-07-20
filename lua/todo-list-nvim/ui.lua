@@ -9,6 +9,8 @@ local M = {}
 ---@field win integer|nil
 ---@field todos TodoItem[]
 ---@field width integer
+---@field line_todo_id table<integer, string> 1-based buffer row → todo id
+---@field id_first_row table<string, integer> todo id → first 1-based buffer row
 
 ---@type UiState
 local state = {
@@ -16,6 +18,8 @@ local state = {
 	win = nil,
 	todos = {},
 	width = 72,
+	line_todo_id = {},
+	id_first_row = {},
 }
 
 local NS = vim.api.nvim_create_namespace("todo-list-nvim")
@@ -23,13 +27,13 @@ local NS = vim.api.nvim_create_namespace("todo-list-nvim")
 local HEADER_LINES = 3
 local DUE_COL_WIDTH = 15 -- "due YYYY-MM-DD"
 local BADGE = "OVERDUE"
-local BADGE_WIDTH = #BADGE + 2 -- "  OVERDUE"
+local BADGE_WIDTH = #BADGE + 4 -- "  OVERDUE"
+local RIGHT_COL_WIDTH = DUE_COL_WIDTH + BADGE_WIDTH
+local PREFIX = " [ ]  " -- display width of checkbox prefix (same for [x])
+local PREFIX_WIDTH = vim.fn.strdisplaywidth(PREFIX)
 
 local function is_open()
-	return state.win
-		and vim.api.nvim_win_is_valid(state.win)
-		and state.buf
-		and vim.api.nvim_buf_is_valid(state.buf)
+	return state.win and vim.api.nvim_win_is_valid(state.win) and state.buf and vim.api.nvim_buf_is_valid(state.buf)
 end
 
 local function close()
@@ -39,33 +43,8 @@ local function close()
 	state.win = nil
 	state.buf = nil
 	state.todos = {}
-end
-
----@param s string
----@param max_width integer
----@return string
-local function truncate(s, max_width)
-	if max_width < 1 then
-		return ""
-	end
-	if vim.fn.strdisplaywidth(s) <= max_width then
-		return s
-	end
-	if max_width <= 1 then
-		return "…"
-	end
-	local budget = max_width - 1
-	local lo, hi = 0, vim.fn.strchars(s)
-	while lo < hi do
-		local mid = math.floor((lo + hi + 1) / 2)
-		local part = vim.fn.strcharpart(s, 0, mid)
-		if vim.fn.strdisplaywidth(part) <= budget then
-			lo = mid
-		else
-			hi = mid - 1
-		end
-	end
-	return vim.fn.strcharpart(s, 0, lo) .. "…"
+	state.line_todo_id = {}
+	state.id_first_row = {}
 end
 
 ---@param s string
@@ -79,12 +58,84 @@ local function pad_right(s, width)
 	return s .. string.rep(" ", width - w)
 end
 
+---Wrap string into chunks that each fit within max_width display cells (no ellipsis).
+---Prefers breaking at spaces when possible.
+---@param s string
+---@param max_width integer
+---@return string[]
+local function wrap_text(s, max_width)
+	if max_width < 1 then
+		max_width = 1
+	end
+	if s == "" then
+		return { "" }
+	end
+
+	local chunks = {}
+	local chars = vim.fn.strchars(s)
+	local i = 0
+	while i < chars do
+		-- skip leading spaces on new lines (except we keep them only within a chunk)
+		while i < chars and vim.fn.strcharpart(s, i, 1) == " " do
+			i = i + 1
+		end
+		if i >= chars then
+			break
+		end
+
+		local hi = chars - i
+		local best = 1
+		local left, right = 1, hi
+		while left <= right do
+			local mid = math.floor((left + right) / 2)
+			local part = vim.fn.strcharpart(s, i, mid)
+			if vim.fn.strdisplaywidth(part) <= max_width then
+				best = mid
+				left = mid + 1
+			else
+				right = mid - 1
+			end
+		end
+		if best < 1 then
+			best = 1
+		end
+
+		-- prefer last space within the chunk (word wrap)
+		local chunk = vim.fn.strcharpart(s, i, best)
+		if i + best < chars then
+			local break_at = nil
+			for j = best, 1, -1 do
+				if vim.fn.strcharpart(s, i + j - 1, 1) == " " then
+					break_at = j - 1 -- exclude the space
+					break
+				end
+			end
+			if break_at and break_at > 0 then
+				best = break_at
+				chunk = vim.fn.strcharpart(s, i, best)
+			end
+		end
+
+		table.insert(chunks, chunk)
+		i = i + best
+		-- consume the space we broke on
+		if i < chars and vim.fn.strcharpart(s, i, 1) == " " then
+			i = i + 1
+		end
+	end
+
+	if #chunks == 0 then
+		return { "" }
+	end
+	return chunks
+end
+
 ---@class LineSegments
 ---@field text string
----@field checkbox_col integer 0-based byte start
----@field checkbox_end integer
----@field title_col integer
----@field title_end integer
+---@field checkbox_col integer|nil 0-based byte start
+---@field checkbox_end integer|nil
+---@field title_col integer|nil
+---@field title_end integer|nil
 ---@field due_col integer|nil
 ---@field due_end integer|nil
 ---@field badge_col integer|nil
@@ -92,74 +143,92 @@ end
 ---@field overdue boolean
 ---@field completed boolean
 
----Build a column-aligned todo line and byte ranges for highlights.
+---Two-column block: title wraps on the left; due/OVERDUE fixed on first line right column.
 ---@param item TodoItem
 ---@param width integer
----@return LineSegments
-local function format_line(item, width)
+---@return LineSegments[]
+local function format_item(item, width)
 	local mark = item.completed and "[x]" or "[ ]"
 	local overdue = todo.is_overdue(item)
 	local due_text = item.due_at and ("due " .. item.due_at) or ""
 	local badge_text = overdue and BADGE or ""
 
 	local prefix = " " .. mark .. "  "
-	local right_w = 0
-	if due_text ~= "" then
-		right_w = right_w + DUE_COL_WIDTH
-	end
-	if badge_text ~= "" then
-		right_w = right_w + BADGE_WIDTH
+	local title_width = math.max(4, width - PREFIX_WIDTH - RIGHT_COL_WIDTH)
+	local title_chunks = wrap_text(item.title, title_width)
+	if #title_chunks == 0 then
+		title_chunks = { "" }
 	end
 
-	local title_budget = math.max(8, width - vim.fn.strdisplaywidth(prefix) - right_w - 1)
-	local title = truncate(item.title, title_budget)
-	local title_padded = pad_right(title, title_budget)
+	local cont_indent = string.rep(" ", PREFIX_WIDTH)
+	---@type LineSegments[]
+	local segs = {}
 
-	local parts = { prefix, title_padded }
-	local checkbox_col = 1 -- after leading space
-	local checkbox_end = checkbox_col + #mark
-	local title_col = #prefix
-	local title_end = title_col + #title
+	for i, chunk in ipairs(title_chunks) do
+		local is_first = i == 1
+		local left
+		local checkbox_col, checkbox_end, title_col, title_end
+		local due_col, due_end, badge_col, badge_end
 
-	local due_col, due_end, badge_col, badge_end
+		if is_first then
+			left = prefix .. pad_right(chunk, title_width)
+			checkbox_col = 1
+			checkbox_end = checkbox_col + #mark
+			title_col = #prefix
+			title_end = title_col + #chunk
 
-	if due_text ~= "" then
-		local due_padded = pad_right(due_text, DUE_COL_WIDTH)
-		due_col = #table.concat(parts)
-		table.insert(parts, due_padded)
-		due_end = due_col + #due_text
+			-- fixed right column always starts after left column
+			local right_start = #left
+			local due_padded = pad_right(due_text, DUE_COL_WIDTH)
+			left = left .. due_padded
+			if due_text ~= "" then
+				due_col = right_start
+				due_end = right_start + #due_text
+			end
+			if badge_text ~= "" then
+				left = left .. "  " .. badge_text
+				badge_col = right_start + DUE_COL_WIDTH + 2
+				badge_end = badge_col + #badge_text
+			else
+				-- keep column width consistent when no badge
+				left = left .. string.rep(" ", BADGE_WIDTH)
+			end
+		else
+			left = cont_indent .. chunk
+			title_col = #cont_indent
+			title_end = title_col + #chunk
+		end
+
+		table.insert(segs, {
+			text = left,
+			checkbox_col = checkbox_col,
+			checkbox_end = checkbox_end,
+			title_col = title_col,
+			title_end = title_end,
+			due_col = due_col,
+			due_end = due_end,
+			badge_col = badge_col,
+			badge_end = badge_end,
+			overdue = overdue,
+			completed = item.completed,
+		})
 	end
 
-	if badge_text ~= "" then
-		table.insert(parts, "  ")
-		badge_col = #table.concat(parts)
-		table.insert(parts, badge_text)
-		badge_end = badge_col + #badge_text
-	end
-
-	return {
-		text = table.concat(parts),
-		checkbox_col = checkbox_col,
-		checkbox_end = checkbox_end,
-		title_col = title_col,
-		title_end = title_end,
-		due_col = due_col,
-		due_end = due_end,
-		badge_col = badge_col,
-		badge_end = badge_end,
-		overdue = overdue,
-		completed = item.completed,
-	}
+	return segs
 end
 
 ---@param row integer 0-based
 ---@param seg LineSegments
 local function apply_row_highlights(row, seg)
 	local hl = vim.api.nvim_buf_add_highlight
-	hl(state.buf, NS, "TodoListNvimCheckbox", row, seg.checkbox_col, seg.checkbox_end)
+	if seg.checkbox_col and seg.checkbox_end then
+		hl(state.buf, NS, "TodoListNvimCheckbox", row, seg.checkbox_col, seg.checkbox_end)
+	end
 
-	local title_hl = seg.completed and "TodoListNvimTitleDone" or "TodoListNvimTitle"
-	hl(state.buf, NS, title_hl, row, seg.title_col, seg.title_end)
+	if seg.title_col and seg.title_end and seg.title_end > seg.title_col then
+		local title_hl = seg.completed and "TodoListNvimTitleDone" or "TodoListNvimTitle"
+		hl(state.buf, NS, title_hl, row, seg.title_col, seg.title_end)
+	end
 
 	if seg.due_col and seg.due_end then
 		local due_hl = (seg.overdue and not seg.completed) and "TodoListNvimOverdue" or "TodoListNvimDue"
@@ -180,14 +249,13 @@ local function render(prefer_id)
 	local cursor_id = prefer_id
 	if not cursor_id then
 		local row = vim.api.nvim_win_get_cursor(state.win)[1]
-		local idx = row - HEADER_LINES
-		if idx >= 1 and idx <= #state.todos then
-			cursor_id = state.todos[idx].id
-		end
+		cursor_id = state.line_todo_id[row]
 	end
 
 	state.width = vim.api.nvim_win_get_width(state.win)
 	state.todos = todo.sorted(todo.list())
+	state.line_todo_id = {}
+	state.id_first_row = {}
 
 	local lines = {
 		" Todo List",
@@ -197,14 +265,23 @@ local function render(prefer_id)
 
 	---@type LineSegments[]
 	local segments = {}
+	---@type integer[] 0-based row for each segment
+	local segment_rows = {}
 
 	if #state.todos == 0 then
 		table.insert(lines, " (no todos — press a to add)")
 	else
 		for _, item in ipairs(state.todos) do
-			local seg = format_line(item, state.width)
-			table.insert(segments, seg)
-			table.insert(lines, seg.text)
+			local item_segs = format_item(item, state.width)
+			local first_row = #lines + 1 -- 1-based
+			state.id_first_row[item.id] = first_row
+			for _, seg in ipairs(item_segs) do
+				local row_1 = #lines + 1
+				state.line_todo_id[row_1] = item.id
+				table.insert(lines, seg.text)
+				table.insert(segments, seg)
+				table.insert(segment_rows, row_1 - 1)
+			end
 		end
 	end
 
@@ -221,19 +298,14 @@ local function render(prefer_id)
 		vim.api.nvim_buf_add_highlight(state.buf, NS, "TodoListNvimHelp", 3, 0, -1)
 	else
 		for i, seg in ipairs(segments) do
-			apply_row_highlights(i + HEADER_LINES - 1, seg)
+			apply_row_highlights(segment_rows[i], seg)
 		end
 	end
 
 	if #state.todos > 0 then
-		local target_row = HEADER_LINES + 1
-		if cursor_id then
-			for i, item in ipairs(state.todos) do
-				if item.id == cursor_id then
-					target_row = i + HEADER_LINES
-					break
-				end
-			end
+		local target_row = state.id_first_row[state.todos[1].id] or (HEADER_LINES + 1)
+		if cursor_id and state.id_first_row[cursor_id] then
+			target_row = state.id_first_row[cursor_id]
 		end
 		local max_row = vim.api.nvim_buf_line_count(state.buf)
 		vim.api.nvim_win_set_cursor(state.win, { math.min(target_row, max_row), 0 })
@@ -246,11 +318,16 @@ local function todo_under_cursor()
 		return nil
 	end
 	local row = vim.api.nvim_win_get_cursor(state.win)[1]
-	local idx = row - HEADER_LINES
-	if idx < 1 or idx > #state.todos then
+	local id = state.line_todo_id[row]
+	if not id then
 		return nil
 	end
-	return state.todos[idx]
+	for _, item in ipairs(state.todos) do
+		if item.id == id then
+			return item
+		end
+	end
+	return nil
 end
 
 ---@return string
@@ -538,8 +615,7 @@ local function open_window()
 
 	highlights.apply()
 
-	local width = math.min(72, math.max(48, vim.o.columns - 8))
-	local height = math.min(20, math.max(10, vim.o.lines - 8))
+	local width, height = config.window_size()
 	local row = math.floor((vim.o.lines - height) / 2)
 	local col = math.floor((vim.o.columns - width) / 2)
 
@@ -582,12 +658,15 @@ local function open_window()
 			state.win = nil
 			state.buf = nil
 			state.todos = {}
+			state.line_todo_id = {}
+			state.id_first_row = {}
 		end,
 	})
 
 	render()
 	if #state.todos > 0 then
-		vim.api.nvim_win_set_cursor(state.win, { HEADER_LINES + 1, 0 })
+		local first = state.id_first_row[state.todos[1].id] or (HEADER_LINES + 1)
+		vim.api.nvim_win_set_cursor(state.win, { first, 0 })
 	end
 end
 

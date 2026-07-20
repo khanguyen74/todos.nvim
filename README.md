@@ -72,11 +72,19 @@ On macOS/Linux that is usually:
 
 `~/.local/share/nvim/todo-list-nvim/todos.json`
 
-**Cloud-synced store** — set `path` to a file inside your cloud folder:
+**Options**
 
 ```lua
 require("todo-list-nvim").setup({
+  -- Optional: cloud-synced JSON path
   path = vim.fn.expand("~/Dropbox/nvim-todos/todos.json"),
+
+  -- Float size (resolved when :Todo opens)
+  -- nil  → nearly full screen (columns-4 / lines-4)
+  -- 0–1  → fraction of editor size (e.g. 0.9 = 90%)
+  -- >1   → absolute columns / rows (e.g. 100, 30)
+  width = 0.9,
+  height = 0.8,
 })
 ```
 
@@ -173,7 +181,7 @@ path = vim.fn.expand("~/Google Drive/My Drive/nvim-todos/todos.json")
 | `Enter` | Confirm |
 | `Esc` / `q` | Cancel |
 
-Incomplete todos past their due date show a red **OVERDUE** badge; due dates sit in a separate column so they don’t stick to the title.
+Incomplete todos past their due date show a red **OVERDUE** badge. The float uses nearly the full editor width; titles wrap in the **left column** and due / OVERDUE stay in a fixed **right column** on the first line of each item (no truncation).
 
 Colors use theme-linked highlight groups (`TodoListNvimCheckbox`, `TodoListNvimTitle`, `TodoListNvimTitleDone`, `TodoListNvimDue`, `TodoListNvimOverdue`, …). Override them after setup if you want custom colors:
 
