@@ -53,17 +53,6 @@ local function encode_pretty(store)
 	return table.concat(lines, "\n")
 end
 
----File mtime in seconds, or 0 if missing/unreadable.
----@return number
-function M.mtime()
-	local path = config.path()
-	local stat = vim.uv.fs_stat(path)
-	if not stat then
-		return 0
-	end
-	return stat.mtime.sec + (stat.mtime.nsec or 0) / 1e9
-end
-
 ---@return TodoStore
 function M.load()
 	local path = config.path()

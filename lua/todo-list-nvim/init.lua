@@ -1,6 +1,7 @@
 local config = require("todo-list-nvim.config")
 local todo = require("todo-list-nvim.todo")
 local ui = require("todo-list-nvim.ui")
+local highlights = require("todo-list-nvim.highlights")
 
 local M = {}
 
@@ -95,6 +96,7 @@ end
 function M.setup(opts)
   config.setup(opts)
   math.randomseed(os.time())
+  highlights.setup()
   register_commands()
   setup_done = true
 end

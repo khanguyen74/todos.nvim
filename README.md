@@ -8,7 +8,6 @@ A personal todo list for Neovim. Todos are stored in a local JSON file so you ca
 - Overdue highlighting (computed — not stored)
 - Completed / incomplete
 - Floating window UI
-- Auto-refresh when another Neovim session (or sync client) updates the file
 
 ## Requirements
 
@@ -94,7 +93,7 @@ The plugin does not talk to any cloud API. Sync is just: **one JSON file in a fo
 3. Let the cloud client finish syncing before editing on another device.
 4. Prefer editing from **one machine at a time**. If two devices write before sync finishes, **last write wins** and earlier changes can be lost.
 
-Open `:Todo` windows refresh automatically when the file changes (filesystem watch + mtime poll).
+Each time you run `:Todo`, the plugin fully re-reads `todos.json` from disk, so closing the float, editing elsewhere (or waiting for cloud sync), then opening again shows the latest list.
 
 ### Provider examples
 
@@ -153,14 +152,33 @@ path = vim.fn.expand("~/Google Drive/My Drive/nvim-todos/todos.json")
 
 | Key | Action |
 |-----|--------|
-| `a` | Add |
+| `a` | Add (due date defaults to **today**) |
 | `<CR>` / `t` | Toggle complete |
 | `d` | Set due date |
 | `x` | Delete |
+| `↑` / `↓` | Move between todos |
 | `r` | Refresh |
 | `q` / `<Esc>` | Close |
 
-Incomplete todos past their due date are highlighted as overdue.
+**Due date picker** (after `a` or `d`):
+
+| Key | Action |
+|-----|--------|
+| `↑` / `k` | Next day |
+| `↓` / `j` | Previous day |
+| `Del` / `Backspace` / `x` | Clear due date → `(none)` |
+| `t` | Jump to today |
+| `Enter` | Confirm |
+| `Esc` / `q` | Cancel |
+
+Incomplete todos past their due date show a red **OVERDUE** badge; due dates sit in a separate column so they don’t stick to the title.
+
+Colors use theme-linked highlight groups (`TodoListNvimCheckbox`, `TodoListNvimTitle`, `TodoListNvimTitleDone`, `TodoListNvimDue`, `TodoListNvimOverdue`, …). Override them after setup if you want custom colors:
+
+```lua
+vim.api.nvim_set_hl(0, "TodoListNvimDue", { fg = "#89b4fa" })
+vim.api.nvim_set_hl(0, "TodoListNvimOverdue", { fg = "#f38ba8", bold = true })
+```
 
 ## Data file format
 
@@ -185,8 +203,9 @@ Incomplete todos past their due date are highlighted as overdue.
 
 ## Multiple Neovim sessions
 
-- Safe to **open and view** the list in several sessions at once.
-- The floating UI reloads when another session (or sync) updates the file.
+- Every `:Todo` open **fully re-reads** the JSON file from disk (no cache).
+- Close the float → edit in another session or wait for cloud sync → open `:Todo` again to see updates.
+- Press `r` while the float is open to re-read manually.
 - Avoid **simultaneous writes** from two sessions — there is no merge; last save wins.
 
 ## License
