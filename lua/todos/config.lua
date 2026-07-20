@@ -1,21 +1,21 @@
 local M = {}
 
----@class TodoListConfig
----@field path? string Absolute path to the todos JSON file (default: stdpath("data")/todo-list-nvim/todos.json)
+---@class TodosConfig
+---@field path? string Absolute path to the todos JSON file (default: stdpath("data")/todos.nvim/todos.json)
 ---@field width? number Absolute columns if > 1, else fraction of vim.o.columns (0–1). nil → columns - 4
 ---@field height? number Absolute rows if > 1, else fraction of vim.o.lines (0–1). nil → lines - 4
 
----@type TodoListConfig
+---@type TodosConfig
 M.defaults = {
-	path = vim.fn.stdpath("data") .. "/todo-list-nvim/todos.json",
+	path = vim.fn.stdpath("data") .. "/todos.nvim/todos.json",
 	width = nil,
 	height = nil,
 }
 
----@type TodoListConfig
+---@type TodosConfig
 M.options = vim.deepcopy(M.defaults)
 
----@param opts TodoListConfig|nil
+---@param opts TodosConfig|nil
 function M.setup(opts)
 	M.options = vim.tbl_deep_extend("force", vim.deepcopy(M.defaults), opts or {})
 	M.options.path = vim.fn.expand(M.options.path)

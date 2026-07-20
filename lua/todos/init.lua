@@ -1,7 +1,7 @@
-local config = require("todo-list-nvim.config")
-local todo = require("todo-list-nvim.todo")
-local ui = require("todo-list-nvim.ui")
-local highlights = require("todo-list-nvim.highlights")
+local config = require("todos.config")
+local todo = require("todos.todo")
+local ui = require("todos.ui")
+local highlights = require("todos.highlights")
 
 local M = {}
 
@@ -12,11 +12,11 @@ local function notify_err(err)
 end
 
 local function register_commands()
-  vim.api.nvim_create_user_command("Todo", function()
+  vim.api.nvim_create_user_command("Todos", function()
     ui.toggle()
   end, { desc = "Toggle todo list floating window" })
 
-  vim.api.nvim_create_user_command("TodoAdd", function(opts)
+  vim.api.nvim_create_user_command("TodosAdd", function(opts)
     local title = opts.args
     local due
     local date = title:match("%s(%d%d%d%d%-%d%d%-%d%d)%s*$")
@@ -29,17 +29,17 @@ local function register_commands()
       notify_err(err)
       return
     end
-    vim.notify("todo-list-nvim: added", vim.log.levels.INFO)
+    vim.notify("todos: added", vim.log.levels.INFO)
     ui.refresh()
   end, {
     nargs = "+",
     desc = "Add a todo (optional trailing YYYY-MM-DD due date)",
   })
 
-  vim.api.nvim_create_user_command("TodoList", function()
+  vim.api.nvim_create_user_command("TodosList", function()
     local items = todo.sorted(todo.list())
     if #items == 0 then
-      vim.notify("todo-list-nvim: no todos", vim.log.levels.INFO)
+      vim.notify("todos: no todos", vim.log.levels.INFO)
       return
     end
     for _, item in ipairs(items) do
@@ -50,10 +50,10 @@ local function register_commands()
     end
   end, { desc = "Print todos to notifications" })
 
-  vim.api.nvim_create_user_command("TodoToggle", function(opts)
+  vim.api.nvim_create_user_command("TodosToggle", function(opts)
     local id = opts.args
     if id == "" then
-      notify_err("usage: TodoToggle <id>")
+      notify_err("usage: TodosToggle <id>")
       return
     end
     local ok, err = pcall(todo.toggle_complete, id)
@@ -64,10 +64,10 @@ local function register_commands()
     ui.refresh()
   end, { nargs = 1, desc = "Toggle todo completed by id" })
 
-  vim.api.nvim_create_user_command("TodoDue", function(opts)
+  vim.api.nvim_create_user_command("TodosDue", function(opts)
     local parts = vim.split(opts.args, "%s+", { trimempty = true })
     if #parts < 1 then
-      notify_err("usage: TodoDue <id> [YYYY-MM-DD]")
+      notify_err("usage: TodosDue <id> [YYYY-MM-DD]")
       return
     end
     local id = parts[1]
@@ -78,16 +78,16 @@ local function register_commands()
       return
     end
     ui.refresh()
-  end, { nargs = "+", desc = "Set or clear due date: TodoDue <id> [YYYY-MM-DD]" })
+  end, { nargs = "+", desc = "Set or clear due date: TodosDue <id> [YYYY-MM-DD]" })
 
-  vim.api.nvim_create_user_command("TodoPath", function()
+  vim.api.nvim_create_user_command("TodosPath", function()
     ui.path_info()
   end, { desc = "Show path to todos.json" })
 
-  vim.api.nvim_create_user_command("TodoEdit", function(opts)
+  vim.api.nvim_create_user_command("TodosEdit", function(opts)
     local parts = vim.split(opts.args, "%s+", { trimempty = true })
     if #parts < 2 then
-      notify_err("usage: TodoEdit <id> <new title>")
+      notify_err("usage: TodosEdit <id> <new title>")
       return
     end
     local id = parts[1]
@@ -98,7 +98,12 @@ local function register_commands()
       return
     end
     ui.refresh()
-  end, { nargs = "+", desc = "Edit todo title: TodoEdit <id> <new title>" })
+  end, { nargs = "+", desc = "Edit todo title: TodosEdit <id> <new title>" })
+
+  -- Short alias
+  vim.api.nvim_create_user_command("Todo", function()
+    ui.toggle()
+  end, { desc = "Alias for :Todos" })
 end
 
 ---Ensure setup() has run (defaults if the user never called it).
@@ -108,7 +113,7 @@ function M.ensure_setup()
   end
 end
 
----@param opts TodoListConfig|nil
+---@param opts TodosConfig|nil
 function M.setup(opts)
   config.setup(opts)
   math.randomseed(os.time())

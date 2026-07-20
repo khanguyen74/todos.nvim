@@ -1,6 +1,6 @@
-local todo = require("todo-list-nvim.todo")
-local config = require("todo-list-nvim.config")
-local highlights = require("todo-list-nvim.highlights")
+local todo = require("todos.todo")
+local config = require("todos.config")
+local highlights = require("todos.highlights")
 
 local M = {}
 
@@ -22,7 +22,7 @@ local state = {
 	id_first_row = {},
 }
 
-local NS = vim.api.nvim_create_namespace("todo-list-nvim")
+local NS = vim.api.nvim_create_namespace("todos")
 
 local HEADER_LINES = 3
 local DUE_COL_WIDTH = 15 -- "due YYYY-MM-DD"
@@ -222,21 +222,21 @@ end
 local function apply_row_highlights(row, seg)
 	local hl = vim.api.nvim_buf_add_highlight
 	if seg.checkbox_col and seg.checkbox_end then
-		hl(state.buf, NS, "TodoListNvimCheckbox", row, seg.checkbox_col, seg.checkbox_end)
+		hl(state.buf, NS, "TodosCheckbox", row, seg.checkbox_col, seg.checkbox_end)
 	end
 
 	if seg.title_col and seg.title_end and seg.title_end > seg.title_col then
-		local title_hl = seg.completed and "TodoListNvimTitleDone" or "TodoListNvimTitle"
+		local title_hl = seg.completed and "TodosTitleDone" or "TodosTitle"
 		hl(state.buf, NS, title_hl, row, seg.title_col, seg.title_end)
 	end
 
 	if seg.due_col and seg.due_end then
-		local due_hl = (seg.overdue and not seg.completed) and "TodoListNvimOverdue" or "TodoListNvimDue"
+		local due_hl = (seg.overdue and not seg.completed) and "TodosOverdue" or "TodosDue"
 		hl(state.buf, NS, due_hl, row, seg.due_col, seg.due_end)
 	end
 
 	if seg.badge_col and seg.badge_end then
-		hl(state.buf, NS, "TodoListNvimOverdue", row, seg.badge_col, seg.badge_end)
+		hl(state.buf, NS, "TodosOverdue", row, seg.badge_col, seg.badge_end)
 	end
 end
 
@@ -258,7 +258,7 @@ local function render(prefer_id)
 	state.id_first_row = {}
 
 	local lines = {
-		" Todo List",
+		" Todos",
 		"  a add  e edit  <CR>/t toggle  d due  x delete  ↑↓ move  q quit",
 		" " .. string.rep("─", math.max(10, state.width - 2)),
 	}
@@ -290,12 +290,12 @@ local function render(prefer_id)
 	vim.bo[state.buf].modifiable = false
 
 	vim.api.nvim_buf_clear_namespace(state.buf, NS, 0, -1)
-	vim.api.nvim_buf_add_highlight(state.buf, NS, "TodoListNvimHeader", 0, 0, -1)
-	vim.api.nvim_buf_add_highlight(state.buf, NS, "TodoListNvimHelp", 1, 0, -1)
-	vim.api.nvim_buf_add_highlight(state.buf, NS, "TodoListNvimSeparator", 2, 0, -1)
+	vim.api.nvim_buf_add_highlight(state.buf, NS, "TodosHeader", 0, 0, -1)
+	vim.api.nvim_buf_add_highlight(state.buf, NS, "TodosHelp", 1, 0, -1)
+	vim.api.nvim_buf_add_highlight(state.buf, NS, "TodosSeparator", 2, 0, -1)
 
 	if #state.todos == 0 then
-		vim.api.nvim_buf_add_highlight(state.buf, NS, "TodoListNvimHelp", 3, 0, -1)
+		vim.api.nvim_buf_add_highlight(state.buf, NS, "TodosHelp", 3, 0, -1)
 	else
 		for i, seg in ipairs(segments) do
 			apply_row_highlights(segment_rows[i], seg)
@@ -420,9 +420,9 @@ local function prompt_due_date(opts, on_confirm)
 		vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
 		vim.bo[buf].modifiable = false
 		vim.api.nvim_buf_clear_namespace(buf, NS, 0, -1)
-		local value_hl = current == "" and "TodoListNvimHelp" or "TodoListNvimDue"
+		local value_hl = current == "" and "TodosHelp" or "TodosDue"
 		vim.api.nvim_buf_add_highlight(buf, NS, value_hl, 1, 0, -1)
-		vim.api.nvim_buf_add_highlight(buf, NS, "TodoListNvimHelp", 3, 0, -1)
+		vim.api.nvim_buf_add_highlight(buf, NS, "TodosHelp", 3, 0, -1)
 	end
 
 	local function finish(result)
@@ -531,7 +531,7 @@ end
 local function prompt_due()
 	local item = todo_under_cursor()
 	if not item then
-		vim.notify("todo-list-nvim: move cursor onto a todo", vim.log.levels.WARN)
+		vim.notify("todos: move cursor onto a todo", vim.log.levels.WARN)
 		return
 	end
 	prompt_due_date({
@@ -553,7 +553,7 @@ end
 local function prompt_edit()
 	local item = todo_under_cursor()
 	if not item then
-		vim.notify("todo-list-nvim: move cursor onto a todo", vim.log.levels.WARN)
+		vim.notify("todos: move cursor onto a todo", vim.log.levels.WARN)
 		return
 	end
 	vim.ui.input({
@@ -622,7 +622,7 @@ local function open_window()
 	state.width = width
 	state.buf = vim.api.nvim_create_buf(false, true)
 	vim.bo[state.buf].bufhidden = "wipe"
-	vim.bo[state.buf].filetype = "todo-list-nvim"
+	vim.bo[state.buf].filetype = "todos"
 
 	state.win = vim.api.nvim_open_win(state.buf, true, {
 		relative = "editor",
@@ -681,7 +681,7 @@ function M.refresh()
 end
 
 function M.path_info()
-	vim.notify("todo-list-nvim store: " .. config.path(), vim.log.levels.INFO)
+	vim.notify("todos store: " .. config.path(), vim.log.levels.INFO)
 end
 
 return M

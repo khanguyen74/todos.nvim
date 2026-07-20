@@ -1,4 +1,4 @@
-local config = require("todo-list-nvim.config")
+local config = require("todos.config")
 
 local M = {}
 
@@ -68,7 +68,7 @@ function M.load()
 
 	local ok, decoded = pcall(vim.json.decode, raw)
 	if not ok or type(decoded) ~= "table" then
-		vim.notify("todo-list-nvim: failed to parse " .. path .. "; starting empty", vim.log.levels.WARN)
+		vim.notify("todos: failed to parse " .. path .. "; starting empty", vim.log.levels.WARN)
 		return empty_store()
 	end
 
@@ -97,13 +97,13 @@ function M.save(store)
 	local tmp = path .. ".tmp"
 	local write_ok = pcall(vim.fn.writefile, vim.split(pretty, "\n", { plain = true }), tmp)
 	if not write_ok then
-		error("todo-list-nvim: failed to write " .. tmp)
+		error("todos: failed to write " .. tmp)
 	end
 
 	local rename_ok, err = os.rename(tmp, path)
 	if not rename_ok then
 		pcall(os.remove, tmp)
-		error("todo-list-nvim: failed to rename " .. tmp .. " -> " .. path .. ": " .. tostring(err))
+		error("todos: failed to rename " .. tmp .. " -> " .. path .. ": " .. tostring(err))
 	end
 end
 

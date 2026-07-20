@@ -1,4 +1,4 @@
-local storage = require("todo-list-nvim.storage")
+local storage = require("todos.storage")
 
 local M = {}
 
@@ -55,13 +55,13 @@ end
 function M.add(title, due_at)
   title = vim.trim(title or "")
   if title == "" then
-    error("todo-list-nvim: title is required")
+    error("todos: title is required")
   end
   if due_at == "" then
     due_at = nil
   end
   if not valid_due_date(due_at) then
-    error("todo-list-nvim: due_at must be YYYY-MM-DD")
+    error("todos: due_at must be YYYY-MM-DD")
   end
 
   local store = storage.load()
@@ -103,7 +103,7 @@ function M.toggle_complete(id)
       return todo
     end
   end
-  error("todo-list-nvim: todo not found: " .. tostring(id))
+  error("todos: todo not found: " .. tostring(id))
 end
 
 ---@param id string
@@ -114,7 +114,7 @@ function M.set_due(id, due_at)
     due_at = nil
   end
   if not valid_due_date(due_at) then
-    error("todo-list-nvim: due_at must be YYYY-MM-DD")
+    error("todos: due_at must be YYYY-MM-DD")
   end
 
   local store = storage.load()
@@ -126,7 +126,7 @@ function M.set_due(id, due_at)
       return todo
     end
   end
-  error("todo-list-nvim: todo not found: " .. tostring(id))
+  error("todos: todo not found: " .. tostring(id))
 end
 
 ---@param id string
@@ -135,7 +135,7 @@ end
 function M.set_title(id, title)
   title = vim.trim(title or "")
   if title == "" then
-    error("todo-list-nvim: title is required")
+    error("todos: title is required")
   end
 
   local store = storage.load()
@@ -147,7 +147,7 @@ function M.set_title(id, title)
       return todo
     end
   end
-  error("todo-list-nvim: todo not found: " .. tostring(id))
+  error("todos: todo not found: " .. tostring(id))
 end
 
 ---@param id string
@@ -161,7 +161,7 @@ function M.delete(id)
       return todo
     end
   end
-  error("todo-list-nvim: todo not found: " .. tostring(id))
+  error("todos: todo not found: " .. tostring(id))
 end
 
 ---Sort: incomplete first, then overdue, then by due_at, then title.
