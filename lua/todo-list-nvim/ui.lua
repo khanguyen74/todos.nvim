@@ -191,7 +191,7 @@ local function render(prefer_id)
 
 	local lines = {
 		" Todo List",
-		"  a add  <CR>/t toggle  d due  x delete  ↑↓ move  q quit",
+		"  a add  e edit  <CR>/t toggle  d due  x delete  ↑↓ move  q quit",
 		" " .. string.rep("─", math.max(10, state.width - 2)),
 	}
 
@@ -473,6 +473,28 @@ local function prompt_due()
 	end)
 end
 
+local function prompt_edit()
+	local item = todo_under_cursor()
+	if not item then
+		vim.notify("todo-list-nvim: move cursor onto a todo", vim.log.levels.WARN)
+		return
+	end
+	vim.ui.input({
+		prompt = "Edit todo: ",
+		default = item.title,
+	}, function(title)
+		if title == nil then
+			return -- cancelled
+		end
+		local ok, err = pcall(todo.set_title, item.id, title)
+		if not ok then
+			vim.notify(tostring(err), vim.log.levels.ERROR)
+			return
+		end
+		render(item.id)
+	end)
+end
+
 local function do_toggle()
 	local item = todo_under_cursor()
 	if not item then
@@ -544,6 +566,7 @@ local function open_window()
 	map("q", close, "Close todo list")
 	map("<Esc>", close, "Close todo list")
 	map("a", prompt_add, "Add todo")
+	map("e", prompt_edit, "Edit todo title")
 	map("<CR>", do_toggle, "Toggle complete")
 	map("t", do_toggle, "Toggle complete")
 	map("d", prompt_due, "Set due date")

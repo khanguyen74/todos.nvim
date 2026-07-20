@@ -130,6 +130,27 @@ function M.set_due(id, due_at)
 end
 
 ---@param id string
+---@param title string
+---@return TodoItem
+function M.set_title(id, title)
+  title = vim.trim(title or "")
+  if title == "" then
+    error("todo-list-nvim: title is required")
+  end
+
+  local store = storage.load()
+  for _, todo in ipairs(store.todos) do
+    if todo.id == id then
+      todo.title = title
+      todo.updated_at = now_iso()
+      storage.save(store)
+      return todo
+    end
+  end
+  error("todo-list-nvim: todo not found: " .. tostring(id))
+end
+
+---@param id string
 ---@return TodoItem
 function M.delete(id)
   local store = storage.load()

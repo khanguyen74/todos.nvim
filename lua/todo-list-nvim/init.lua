@@ -83,6 +83,22 @@ local function register_commands()
   vim.api.nvim_create_user_command("TodoPath", function()
     ui.path_info()
   end, { desc = "Show path to todos.json" })
+
+  vim.api.nvim_create_user_command("TodoEdit", function(opts)
+    local parts = vim.split(opts.args, "%s+", { trimempty = true })
+    if #parts < 2 then
+      notify_err("usage: TodoEdit <id> <new title>")
+      return
+    end
+    local id = parts[1]
+    local title = vim.trim(opts.args:sub(#id + 1))
+    local ok, err = pcall(todo.set_title, id, title)
+    if not ok then
+      notify_err(err)
+      return
+    end
+    ui.refresh()
+  end, { nargs = "+", desc = "Edit todo title: TodoEdit <id> <new title>" })
 end
 
 ---Ensure setup() has run (defaults if the user never called it).
@@ -105,6 +121,7 @@ M.add = todo.add
 M.list = todo.list
 M.toggle_complete = todo.toggle_complete
 M.set_due = todo.set_due
+M.set_title = todo.set_title
 M.delete = todo.delete
 M.is_overdue = todo.is_overdue
 

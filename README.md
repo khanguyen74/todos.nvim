@@ -147,12 +147,14 @@ path = vim.fn.expand("~/Google Drive/My Drive/nvim-todos/todos.json")
 | `:TodoDue <id> [YYYY-MM-DD]` | Set due date (omit date to clear) |
 | `:TodoToggle <id>` | Toggle completed by id |
 | `:TodoPath` | Show path to `todos.json` |
+| `:TodoEdit <id> new title` | Edit todo title by id |
 
 ### Floating window keys
 
 | Key | Action |
 |-----|--------|
 | `a` | Add (due date defaults to **today**) |
+| `e` | Edit title of the todo under the cursor |
 | `<CR>` / `t` | Toggle complete |
 | `d` | Set due date |
 | `x` | Delete |
